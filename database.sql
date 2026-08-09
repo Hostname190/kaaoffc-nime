@@ -186,21 +186,21 @@ CREATE TABLE IF NOT EXISTS public.reports (
 );
 
 -- ==============================================================================
--- MATIKAN RLS (Row Level Security) SEMENTARA AGAR MUDAH DIDEPLOY & DIKESEKUSI
--- Nantinya, disarankan mengaktifkan RLS jika website sudah masuk fase production.
+-- MATIKAN RLS (Row Level Security) — WAJIB agar tidak ada error 403 Forbidden
+-- Nantinya aktifkan RLS + policies jika sudah masuk fase production.
 -- ==============================================================================
-ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.novels DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.novel_chapters DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_bookmarks DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_history DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.global_messages DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.comments DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.comment_likes DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_activities DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_follows DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.kaaoffc_ratings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.reports DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles          DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.novels            DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.novel_chapters    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_bookmarks    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_history      DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.global_messages   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.comments          DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.comment_likes     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_activities   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_follows      DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.kaaoffc_ratings   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reports           DISABLE ROW LEVEL SECURITY;
 
 -- 13. Tabel Pengaturan Situs (Site Settings)
 CREATE TABLE IF NOT EXISTS public.site_settings (
@@ -218,4 +218,36 @@ INSERT INTO public.site_settings (key, value) VALUES
 ('support_url', 'https://saweria.co/kaaoffc')
 ON CONFLICT (key) DO NOTHING;
 
+-- ==============================================================================
+-- HAPUS POLICY RLS LAMA (jika ada sisa dari konfigurasi sebelumnya)
+-- ==============================================================================
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT schemaname, tablename, policyname
+    FROM pg_policies WHERE schemaname = 'public'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I',
+      r.policyname, r.schemaname, r.tablename);
+  END LOOP;
+END $$;
+
+-- ==============================================================================
+-- GRANT PERMISSIONS — WAJIB agar anon key bisa akses tabel di production
+-- ==============================================================================
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT ALL ON TABLES TO anon, authenticated;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT ALL ON SEQUENCES TO anon, authenticated;
+
+-- ==============================================================================
 -- SELESAI! SEMUA TABEL TELAH BERHASIL DIBUAT! 🎉
+-- ==============================================================================
