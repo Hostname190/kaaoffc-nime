@@ -185,6 +185,31 @@ CREATE TABLE IF NOT EXISTS public.reports (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 13. Tabel Private Chats (Daftar Obrolan Pribadi)
+CREATE TABLE IF NOT EXISTS public.private_chats (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user1_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    user2_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    last_message TEXT,
+    last_message_time TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(user1_id, user2_id)
+);
+
+-- 14. Tabel Private Messages (Isi Pesan Obrolan Pribadi)
+CREATE TABLE IF NOT EXISTS public.private_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    chat_id UUID REFERENCES public.private_chats(id) ON DELETE CASCADE,
+    sender_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    receiver_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    content TEXT,
+    anime_url TEXT,
+    anime_title TEXT,
+    anime_poster TEXT,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- ==============================================================================
 -- MATIKAN RLS (Row Level Security) — WAJIB agar tidak ada error 403 Forbidden
 -- Nantinya aktifkan RLS + policies jika sudah masuk fase production.
@@ -201,8 +226,10 @@ ALTER TABLE public.user_activities   DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_follows      DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.kaaoffc_ratings   DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports           DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.private_chats     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.private_messages  DISABLE ROW LEVEL SECURITY;
 
--- 13. Tabel Pengaturan Situs (Site Settings)
+-- 15. Tabel Pengaturan Situs (Site Settings)
 CREATE TABLE IF NOT EXISTS public.site_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
@@ -247,6 +274,30 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT ALL ON SEQUENCES TO anon, authenticated;
+
+-- ==============================================================================
+-- KONFIGURASI REALTIME (Wajib untuk Chat)
+-- ==============================================================================
+-- Masukkan tabel ke publication supabase_realtime agar realtime subscription jalan
+DO $$
+BEGIN
+  -- Cek apakah tabel sudah ada di publication, jika belum tambahkan
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'global_messages') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.global_messages;
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'private_chats') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.private_chats;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'private_messages') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.private_messages;
+  END IF;
+EXCEPTION
+  WHEN undefined_object THEN
+    -- Jika publication supabase_realtime tidak ada (mungkin beda setup di database lokal), abaikan
+    NULL;
+END $$;
 
 -- ==============================================================================
 -- SELESAI! SEMUA TABEL TELAH BERHASIL DIBUAT! 🎉
