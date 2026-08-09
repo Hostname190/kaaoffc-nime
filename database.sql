@@ -210,6 +210,29 @@ CREATE TABLE IF NOT EXISTS public.private_messages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 15. Tabel User Badges (Pencapaian User)
+CREATE TABLE IF NOT EXISTS public.user_badges (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    badge_name TEXT NOT NULL,
+    badge_desc TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(user_id, badge_name)
+);
+
+-- 16. Tabel User Showcase (Koleksi Pilihan User)
+CREATE TABLE IF NOT EXISTS public.user_showcase (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    item_title TEXT NOT NULL,
+    item_image TEXT,
+    item_type TEXT DEFAULT 'Donghua',
+    item_url TEXT,
+    position_index INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(user_id, position_index)
+);
+
 -- ==============================================================================
 -- MATIKAN RLS (Row Level Security) — WAJIB agar tidak ada error 403 Forbidden
 -- Nantinya aktifkan RLS + policies jika sudah masuk fase production.
@@ -228,8 +251,10 @@ ALTER TABLE public.kaaoffc_ratings   DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports           DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.private_chats     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.private_messages  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_badges       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_showcase     DISABLE ROW LEVEL SECURITY;
 
--- 15. Tabel Pengaturan Situs (Site Settings)
+-- 17. Tabel Pengaturan Situs (Site Settings)
 CREATE TABLE IF NOT EXISTS public.site_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
@@ -298,6 +323,14 @@ EXCEPTION
     -- Jika publication supabase_realtime tidak ada (mungkin beda setup di database lokal), abaikan
     NULL;
 END $$;
+
+-- ==============================================================================
+-- SETUP STORAGE BUCKETS (Wajib untuk upload gambar/banner)
+-- ==============================================================================
+-- Buat bucket novel-covers jika belum ada dan pastikan public
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('novel-covers', 'novel-covers', true)
+ON CONFLICT (id) DO NOTHING;
 
 -- ==============================================================================
 -- SELESAI! SEMUA TABEL TELAH BERHASIL DIBUAT! 🎉
