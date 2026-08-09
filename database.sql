@@ -102,8 +102,16 @@ CREATE TABLE IF NOT EXISTS public.user_history (
 CREATE TABLE IF NOT EXISTS public.global_messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
+    content TEXT,                                                              -- Nullable untuk pesan audio-only
+    audio_url TEXT,                                                            -- URL audio message
     reply_to UUID REFERENCES public.global_messages(id) ON DELETE SET NULL,
+    reply_to_username TEXT,                                                    -- Username yang di-reply
+    level INTEGER DEFAULT 1,                                                   -- Level user saat kirim pesan
+    level_text TEXT,                                                           -- Label level user
+    avatar_url TEXT,                                                           -- Avatar user saat kirim pesan
+    display_name TEXT,                                                         -- Nama tampilan user
+    roles TEXT[],                                                              -- Role array user (misal: ['Admin'])
+    is_verified BOOLEAN DEFAULT FALSE,                                         -- Badge verified
     is_pinned BOOLEAN DEFAULT FALSE,
     is_edited BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL

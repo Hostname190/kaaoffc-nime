@@ -35,7 +35,7 @@ export async function POST(req: Request) {
       .from('profiles')
       .select('role, is_verified')
       .eq('id', user_id)
-      .single();
+      .maybeSingle();
 
     // 3. INSERT MESSAGE
     const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user_id);
@@ -52,20 +52,20 @@ export async function POST(req: Request) {
 
     const isVerified = profile?.is_verified || isDbAdmin;
 
+    // Hanya kirim kolom yang benar-benar ada di tabel global_messages
     const msgData = {
-      ...body,
       user_id,
       content: content ? content.trim().substring(0, 1000) : null,
+      reply_to: reply_to || null,
       audio_url: audio_url || null,
-      // Overrides for security
+      reply_to_username: reply_to_username || null,
+      level: level || 1,
+      level_text: level_text || null,
+      avatar_url: avatar_url || null,
+      display_name: display_name || null,
       roles: isDbAdmin ? [metaData.role || profile?.role || 'Admin'] : [profile?.role || 'User'],
-      is_verified: isVerified
+      is_verified: isVerified,
     };
-
-    // Remove undefined/invalid fields that we accidentally added in previous version
-    delete msgData.role;
-    delete msgData.display_name;
-    delete msgData.level;
 
     const { data: newMsg, error: insertError } = await supabaseAdmin
       .from('global_messages')
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
 
     if (insertError) {
       console.error('[Insert message error]', insertError);
-      return NextResponse.json({ error: 'Gagal mengirim pesan' }, { status: 500 });
+      return NextResponse.json({ error: 'Gagal mengirim pesan: ' + insertError.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, message: newMsg });
