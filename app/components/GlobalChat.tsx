@@ -32,6 +32,7 @@ export default function GlobalChat({ isOpen, onClose }: GlobalChatProps) {
   const [showOnlyPinned, setShowOnlyPinned] = useState(false);
   const [currentPinnedIndex, setCurrentPinnedIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   
   // Audio Recording States
   const [isRecording, setIsRecording] = useState(false);
@@ -131,7 +132,7 @@ export default function GlobalChat({ isOpen, onClose }: GlobalChatProps) {
     const fetchProfiles = async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('id, level, exp, display_name, avatar_url, role, is_verified')
+        .select('id, level, exp, display_name, username, avatar_url, role, is_verified')
         .in('id', missingIds);
       if (data && data.length > 0) {
         setUserProfiles(prev => {
@@ -159,6 +160,25 @@ export default function GlobalChat({ isOpen, onClose }: GlobalChatProps) {
     }
     // Fallback to stored level_text if profile not loaded yet
     return msg.level_text || 'Lvl 1 - Rookie';
+  };
+
+  // Helper: get sender name from profile cache or fallback
+  const getSenderName = (msg: any) => {
+    if (!msg) return 'User';
+    const profile = userProfiles[msg.user_id];
+    return profile?.display_name || profile?.username || msg.display_name || msg.username || 'User';
+  };
+
+  // Helper: get sender avatar URL from profile cache or fallback
+  const getSenderAvatar = (msg: any) => {
+    if (!msg) return null;
+    const profile = userProfiles[msg.user_id];
+    return profile?.avatar_url || msg.avatar_url || null;
+  };
+
+  // Helper: get sender avatar initials text
+  const getSenderAvatarText = (msg: any) => {
+    return getSenderName(msg).substring(0, 2).toUpperCase();
   };
 
   // Handle Send Message
@@ -405,7 +425,7 @@ export default function GlobalChat({ isOpen, onClose }: GlobalChatProps) {
   };
 
   // Extract unique users for mentions
-  const uniqueUsers = Array.from(new Set(messages.map(m => m.username)));
+  const uniqueUsers = Array.from(new Set(messages.map(m => getSenderName(m))));
   const filteredUsers = mentionSearch !== null 
     ? uniqueUsers.filter(u => String(u).toLowerCase().includes(mentionSearch.toLowerCase())).slice(0, 5)
     : [];
@@ -502,7 +522,7 @@ export default function GlobalChat({ isOpen, onClose }: GlobalChatProps) {
             <div className="flex-1 min-w-0 pr-8">
               <div className="text-yellow-500 text-[10px] font-bold tracking-wider mb-0.5">PINNED MESSAGE</div>
               <div className="text-xs text-zinc-300 truncate">
-                <span className="font-bold text-white">{activePinnedMessage.username}:</span> {activePinnedMessage.content}
+                <span className="font-bold text-white">{getSenderName(activePinnedMessage)}:</span> {activePinnedMessage.content}
               </div>
             </div>
             {pinnedMessages.length > 1 && (
@@ -527,10 +547,28 @@ export default function GlobalChat({ isOpen, onClose }: GlobalChatProps) {
               </div>
             ) : (
               (showOnlyPinned ? pinnedMessages : messages).map((msg, idx) => {
-              const isDevRole = msg.roles && msg.roles.some((r: string) => r.toLowerCase().includes('dev') || r.toLowerCase().includes('admin'));
-              const isVerified = msg.is_verified || isDevRole;
-              const nameColor = isDevRole ? 'text-blue-400 font-bold' : (msg.name_color || 'text-zinc-200');
-              const avatarColor = isDevRole ? 'bg-blue-600 text-white border-2 border-blue-400' : msg.avatar_color;
+              const roles = msg.roles || [];
+              const isDevRole = roles.some((r: string) => r.toLowerCase().includes('dev') || r.toLowerCase().includes('admin') || r.toLowerCase().includes('owner') || r.toLowerCase().includes('mod'));
+              const isVip = roles.some((r: string) => r.toUpperCase() === 'VIP');
+              const isVerified = msg.is_verified || isDevRole || isVip;
+
+              let nameColor = 'text-zinc-200';
+              let avatarColor = 'bg-zinc-700 text-zinc-100';
+              let roleColor = 'text-zinc-500';
+
+              if (isDevRole) {
+                nameColor = 'text-blue-400 font-bold';
+                avatarColor = 'bg-blue-600 text-white border-2 border-blue-400';
+                roleColor = 'bg-blue-600 text-white font-extrabold tracking-widest';
+              } else if (isVip) {
+                nameColor = 'text-yellow-500 font-bold';
+                avatarColor = 'bg-yellow-500 text-black';
+                roleColor = 'bg-yellow-500 text-black font-bold';
+              } else {
+                avatarColor = msg.avatar_color || 'bg-zinc-700 text-zinc-100';
+                roleColor = msg.role_color || 'text-zinc-500';
+                nameColor = msg.name_color || 'text-zinc-200';
+              }
 
               // Check if current user is owner or developer
               const isOwner = user?.id === msg.user_id;
@@ -550,17 +588,19 @@ export default function GlobalChat({ isOpen, onClose }: GlobalChatProps) {
                   }}
                 >
                   {/* Avatar */}
-                  {msg.avatar_url ? (
+                  {getSenderAvatar(msg) && !imageErrors[msg.id] ? (
                     <img 
-                      src={msg.avatar_url} 
-                      alt={msg.username} 
+                      src={getSenderAvatar(msg)!} 
+                      alt={getSenderName(msg)} 
                       className={`w-10 h-10 rounded-full object-cover shrink-0 shadow-sm cursor-pointer hover:opacity-80 transition-opacity ${isDevRole ? 'border-2 border-blue-500 p-[1px]' : ''}`} 
                       onClick={() => router.push(`/user/${msg.user_id}`)} 
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                      onError={() => {
+                        setImageErrors(prev => ({ ...prev, [msg.id]: true }));
+                      }} 
                     />
                   ) : (
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${avatarColor} shadow-sm cursor-pointer hover:opacity-80 transition-opacity`} onClick={() => router.push(`/user/${msg.user_id}`)}>
-                      {msg.avatar_text}
+                      {getSenderAvatarText(msg)}
                     </div>
                   )}
                   
@@ -573,13 +613,13 @@ export default function GlobalChat({ isOpen, onClose }: GlobalChatProps) {
                             className={`font-bold text-sm cursor-pointer hover:underline ${nameColor}`}
                             onClick={() => router.push(`/user/${msg.user_id}`)}
                           >
-                            {msg.username}
+                            {getSenderName(msg)}
                           </span>
                           {isVerified && (
                             <BadgeCheck size={14} className="text-[#1B1D2A] fill-blue-500 ml-0.5" />
                           )}
-                          {msg.roles && msg.roles.map((role: string, rIdx: number) => (
-                            <span key={rIdx} className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${msg.role_color}`}>
+                          {roles.map((role: string, rIdx: number) => (
+                            <span key={rIdx} className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${roleColor}`}>
                               {role}
                             </span>
                           ))}
@@ -722,7 +762,7 @@ export default function GlobalChat({ isOpen, onClose }: GlobalChatProps) {
             <div className="absolute bottom-[100%] left-0 right-0 bg-[#232536] border-t border-[#2A2C40] px-4 py-2 flex items-center justify-between text-xs">
               <div>
                 <span className="text-zinc-400">Membalas </span>
-                <span className="text-indigo-400 font-bold">@{replyTo.username}</span>
+                <span className="text-indigo-400 font-bold">@{getSenderName(replyTo)}</span>
                 <p className="text-zinc-500 truncate max-w-[250px]">{replyTo.content}</p>
               </div>
               <button onClick={() => setReplyTo(null)} className="p-1 hover:bg-white/10 rounded-full transition-colors">

@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { user_id, content, reply_to, reply_to_username, level, level_text, avatar_url, display_name, role, is_verified, audio_url } = body;
+    const { user_id, content, reply_to, reply_to_username, level, level_text, avatar_url, display_name, username: bodyUsername, role, is_verified, audio_url } = body;
 
     if (!user_id || (!content && !audio_url)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
       level: level || 1,
       level_text: level_text || null,
       avatar_url: avatar_url || null,
-      display_name: display_name || null,
+      display_name: display_name || bodyUsername || null,
       roles: isDbAdmin ? [metaData.role || profile?.role || 'Admin'] : [profile?.role || 'User'],
       is_verified: isVerified,
     };
