@@ -142,15 +142,17 @@ export async function PATCH(req: Request) {
     if (action === 'edit') {
       if (!content) return NextResponse.json({ error: 'Content required for edit' }, { status: 400 });
       
+      // Gunakan maybeSingle() agar tidak throw jika tidak ada row yang cocok
       const { data, error } = await supabaseAdmin
         .from('comments')
         .update({ content })
         .eq('id', commentId)
-        .eq('user_id', userId) // Hanya pemilik yang bisa edit
+        .eq('user_id', userId)
         .select()
-        .single();
+        .maybeSingle();
         
       if (error) throw error;
+      if (!data) return NextResponse.json({ error: 'Komentar tidak ditemukan atau bukan milik kamu' }, { status: 404 });
       return NextResponse.json(data);
       
     } else if (action === 'like' || action === 'unlike') {
@@ -159,32 +161,47 @@ export async function PATCH(req: Request) {
           .from('comment_likes')
           .insert([{ comment_id: commentId, user_id: userId }]);
           
-        if (likeError && likeError.code !== '23505') throw likeError; // Abaikan jika sudah pernah like
+        if (likeError && likeError.code !== '23505') throw likeError;
         
-        // Increment count
-        await supabaseAdmin.rpc('increment_like', { row_id: commentId }).catch(async () => {
-           // Fallback if RPC doesn't exist
-           const { data: c } = await supabaseAdmin.from('comments').select('likes_count').eq('id', commentId).single();
-           await supabaseAdmin.from('comments').update({ likes_count: (c?.likes_count || 0) + 1 }).eq('id', commentId);
-        });
+        // Increment likes_count langsung tanpa RPC
+        const { data: c } = await supabaseAdmin
+          .from('comments')
+          .select('likes_count')
+          .eq('id', commentId)
+          .maybeSingle();
+          
+        if (c !== null) {
+          await supabaseAdmin
+            .from('comments')
+            .update({ likes_count: (c?.likes_count || 0) + 1 })
+            .eq('id', commentId);
+        }
       } else {
         await supabaseAdmin
           .from('comment_likes')
           .delete()
           .match({ comment_id: commentId, user_id: userId });
           
-        // Decrement count
-        await supabaseAdmin.rpc('decrement_like', { row_id: commentId }).catch(async () => {
-           // Fallback if RPC doesn't exist
-           const { data: c } = await supabaseAdmin.from('comments').select('likes_count').eq('id', commentId).single();
-           await supabaseAdmin.from('comments').update({ likes_count: Math.max(0, (c?.likes_count || 0) - 1) }).eq('id', commentId);
-        });
+        // Decrement likes_count langsung tanpa RPC
+        const { data: c } = await supabaseAdmin
+          .from('comments')
+          .select('likes_count')
+          .eq('id', commentId)
+          .maybeSingle();
+          
+        if (c !== null) {
+          await supabaseAdmin
+            .from('comments')
+            .update({ likes_count: Math.max(0, (c?.likes_count || 0) - 1) })
+            .eq('id', commentId);
+        }
       }
       return NextResponse.json({ success: true });
     }
     
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error: any) {
+    console.error('[PATCH comments error]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

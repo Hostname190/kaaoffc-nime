@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     role TEXT DEFAULT 'user',
     username TEXT,
+    display_name TEXT,                                                         -- Nama tampilan user
     avatar_url TEXT,
     exp INTEGER DEFAULT 0,
     level INTEGER DEFAULT 1,
@@ -22,7 +23,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     bio TEXT,
     banner_url TEXT,
     theme_color TEXT DEFAULT '#1A1A22',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    is_verified BOOLEAN DEFAULT FALSE,                                         -- Badge verified
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())   -- Timestamp update terakhir
 );
 -- Trigger untuk otomatis membuat profil saat user baru mendaftar di Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -89,7 +92,9 @@ CREATE TABLE IF NOT EXISTS public.user_history (
     poster TEXT,
     category TEXT,
     progress INTEGER DEFAULT 0,
+    last_episode TEXT,                                                         -- Judul episode/chapter terakhir
     last_accessed TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),  -- Untuk sorting riwayat terbaru
     UNIQUE(user_id, item_url)
 );
 
@@ -108,8 +113,12 @@ CREATE TABLE IF NOT EXISTS public.global_messages (
 CREATE TABLE IF NOT EXISTS public.comments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    post_url TEXT NOT NULL,
+    item_url TEXT NOT NULL,                                                    -- URL konten yang dikomentari (dipakai di kode)
     content TEXT NOT NULL,
+    parent_id UUID REFERENCES public.comments(id) ON DELETE SET NULL,          -- Untuk fitur reply/balasan
+    user_email TEXT,                                                           -- Email user saat komentar dibuat
+    user_avatar TEXT,                                                          -- Avatar user saat komentar dibuat
+    user_level INTEGER DEFAULT 1,                                              -- Level user saat komentar dibuat
     likes_count INTEGER DEFAULT 0,
     is_pinned BOOLEAN DEFAULT FALSE,
     is_banned BOOLEAN DEFAULT FALSE,
@@ -129,8 +138,12 @@ CREATE TABLE IF NOT EXISTS public.comment_likes (
 CREATE TABLE IF NOT EXISTS public.user_activities (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    activity_type TEXT NOT NULL,
-    details JSONB,
+    activity_type TEXT NOT NULL,                                               -- Contoh: 'EPISODE DITONTON', 'KOMENTAR SAYA'
+    target_title TEXT,                                                         -- Judul konten yang terkait aktivitas
+    target_url TEXT,                                                           -- URL konten yang terkait aktivitas
+    content TEXT,                                                              -- Isi komentar/balasan jika aktivitas komentar
+    xp_earned INTEGER DEFAULT 0,                                               -- XP yang didapat dari aktivitas ini
+    details JSONB,                                                             -- Data tambahan dalam format JSON
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
